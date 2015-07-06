@@ -1,5 +1,6 @@
 package neo.com.commander;
 
+import android.renderscript.Sampler;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.view.Menu;
@@ -8,27 +9,76 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
+import com.firebase.client.ValueEventListener;
+
+import java.util.Map;
 
 
 public class CommandActivity extends ActionBarActivity {
     private Firebase firebaseRef;
+    private class FBValueChangeListener implements ValueEventListener {
+        @Override
+        public void onDataChange(DataSnapshot ds) {
+            System.out.println("Change! " + ds.getValue());
+            Map<String, String> data = (Map<String, String>) ds.getValue();
+            CommandActivity.this.setTextToView(data.get("responseText"));
+            Toast.makeText(getApplicationContext(), "Execution Complete", Toast.LENGTH_SHORT).show();
+
+        }
+
+        @Override
+        public void onCancelled(FirebaseError fe) {
+            System.out.println(fe.getMessage());
+        }
+    };
+    private ValueEventListener valueListener ;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         //Initialize Firebase Context
         this.initFirebase();
-
         setContentView(R.layout.activity_command);
     }
+    @Override
+    protected void onPause() {
+        System.out.println("On Pause");
+        super.onPause();
+        this.firebaseRef.unauth();
+        this.firebaseRef.removeEventListener(this.valueListener);
+    }
+    
+    @Override
+    protected void onResume() {
+        System.out.println("On Resume");
+        super.onResume();
+        this.initFirebase();
+        
+    }
+
+
 
     private void initFirebase() {
         Firebase.setAndroidContext(this);
         System.out.println("Connecting to neo's firebase...");
         this.firebaseRef = new Firebase("https://fiery-fire-4989.firebaseio.com/");
         System.out.println("Connected to Firebase!" + this.firebaseRef);
+        if(this.valueListener==null)
+            this.valueListener=new FBValueChangeListener();
+        //Also register for listen changes...
+        this.firebaseRef.addValueEventListener(this.valueListener);
+    }
+
+    private void setTextToView(final String text) {
+        ((TextView) findViewById(R.id.commandOutputTextView)).setText(text);
+
+    }
+
+    private void appendTextToView(final String text) {
+        ((TextView) findViewById(R.id.commandOutputTextView)).setText(((TextView) findViewById(R.id.commandOutputTextView)).getText()+"\n");
     }
 
 
@@ -72,6 +122,8 @@ public class CommandActivity extends ActionBarActivity {
         return super.onOptionsItemSelected(item);
     }
 
+
+
     public void doExecute(View view) {
         final TextView textBox = (TextView) findViewById(R.id.editText);
         String command = textBox.getText().toString();
@@ -82,6 +134,9 @@ public class CommandActivity extends ActionBarActivity {
 
         //we have something to work with.
         Toast.makeText(getApplicationContext(),"You Entered :"+command, Toast.LENGTH_SHORT).show();
+
+        //now call the write function
+        this.writeToFirebase(command);
 
 
     }
